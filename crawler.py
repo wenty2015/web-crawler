@@ -10,10 +10,10 @@ import sys
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-RESULT_DIR = '../results/'
+RESULT_DIR = '../results 3/'
 
 class Crawler:
-    MAX_URL_NUM = 5000
+    MAX_URL_NUM = 1000
     URL_PER_FILE = 500
     FILE_URL = 'URL'
     def __init__(self, seed_url_list, title = ''):
@@ -55,7 +55,7 @@ class Crawler:
         html_content['html'] = content
         html_content['http_headers'] = http_headers
         # load html content
-        soup = BeautifulSoup(content, 'xml')
+        soup = BeautifulSoup(content, 'lxml')
         html_content['out_links'] = self.getOutLinks(soup, url)
         title_set = soup.find_all('title')
         if title_set == None or len(title_set) == 0:
@@ -69,7 +69,7 @@ class Crawler:
 
     def loadHTML(self, url):
         try:
-            url_open = urllib2.urlopen(url)
+            url_open = urllib2.urlopen(url, timeout = 1)
             content = url_open.read()
             http_headers = url_open.info().headers
             return self.loadHTMLContent(content, http_headers, url)
@@ -204,10 +204,12 @@ class Crawler:
                 '''aggregate out links
                 out_links: {tmp_url_id: {'url': url, 'in_links': [in_link_url_id],
                                             'domain_id': domain_id, 'duration': i}}'''
+                print 'process outlinks'
                 out_links = processOutLinks(url_next_level)
                 # print out_links
                 ''' sort the out links for each domain
                 crawl_list: {domain_id: [tmp_url_id]}'''
+                print 'generate crawl list'
                 crawl_list = processCrawlList(out_links)
                 '''with open(RESULT_DIR + 'url_next_level', 'wb') as f:
                     cPickle.dump(url_next_level, f)
@@ -217,6 +219,7 @@ class Crawler:
                     cPickle.dump(crawl_list, f)'''
 
                 # crawl all the urls in the next wave, and add them as url nodes
+                print 'start crawling next wave'
                 self.crawlNextLevel(crawl_list, out_links)
                 self.depth += 1
             else:
@@ -479,11 +482,13 @@ def processCrawlList(out_links):
     return crawl_list
 
 if __name__ == '__main__':
-    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolution',
+    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolution'
+    ''',
     'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
     'http://www.historycentral.com/Revolt/causes.html',
     'https://lenoxhistory.org/lenoxhistorybigpicture/non-importation-agreement/',
-    'http://www.history.com/topics/american-revolution/american-revolution-history']
+    'http://www.history.com/topics/american-revolution/american-revolution-history''''
+    ]
     title = 'independence war american revolution cause causes reason reasons purpose purposes'
     crawler = Crawler(seed_url_list, title)
     crawler.crawl()
