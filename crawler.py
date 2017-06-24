@@ -13,8 +13,8 @@ sys.setdefaultencoding("utf-8")
 RESULT_DIR = '../results/'
 
 class Crawler:
-    MAX_URL_NUM = 20000
-    URL_PER_FILE = 1000
+    MAX_URL_NUM = 5000
+    URL_PER_FILE = 500
     FILE_URL = 'URL'
     def __init__(self, seed_url_list, title = ''):
         self.depth = 1
@@ -82,7 +82,7 @@ class Crawler:
         except urllib2.HTTPError as e:
             print 'http error for', url, e
             return None
-        else:
+        except:
             print 'unexpected error', url
             return None
 
@@ -196,7 +196,7 @@ class Crawler:
     def crawl(self):
         now = datetime.now()
         while self.url_num < self.MAX_URL_NUM:
-            print 'depth', self.depth
+            print 'depth', self.depth, 'urls in the queue', len(self.url_queue)
             # print 'links in the queue', len(self.url_queue)
             # get the url list for the next wave of BFS
             url_next_level = self.processURLQueue()
