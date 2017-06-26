@@ -1,25 +1,26 @@
-from bs4 import BeautifulSoup
-import urllib2
 import robotparser
 from collections import deque
 import time
 import os, re
 from datetime import datetime
-import threading
+import requests
+from lxml import html, cssselect
 import sys
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-RESULT_DIR = '../results 3/'
+RESULT_DIR = '../results_full_3rd/'
 
 class Crawler:
-    MAX_URL_NUM = 1000
+    MAX_URL_NUM = 21000
     URL_PER_FILE = 500
     FILE_URL = 'URL'
     def __init__(self, seed_url_list, title = ''):
         self.depth = 1
         self.url_num, self.domain_num = 0, 0
         self.file_no, self.file_cnt = 1, 0
+
+        self.css_selector = cssselect.CSSSelector("a")
 
         self.seed_url_list = seed_url_list
         self.domain_map = {} # {domain: domain_id}
@@ -46,7 +47,8 @@ class Crawler:
             url = canonicalizeURL(raw_url)
             domain = getDomain(url)
             html_content = self.loadHTML(url)
-            _, url_id = self.set(url, domain, html_content)
+            if html_content is not None:
+                _, url_id = self.set(url, domain, html_content)
             self.url_queue.append(url_id)
         return
 
@@ -55,40 +57,30 @@ class Crawler:
         html_content['html'] = content
         html_content['http_headers'] = http_headers
         # load html content
-        soup = BeautifulSoup(content, 'lxml')
-        html_content['out_links'] = self.getOutLinks(soup, url)
-        title_set = soup.find_all('title')
-        if title_set == None or len(title_set) == 0:
-            html_content['title'] = []
-        else:
-            def stripTitle(title):
-                return str(title).lstrip('<title>').rstrip('</title>')
-            html_content['title'] = map(lambda t: stripTitle(t), title_set)
-        html_content['text'] = soup.get_text()
+        html_parser = html.fromstring(content)
+        html_content['out_links'] = self.getOutLinks(
+                                        self.css_selector(html_parser), url)
+        title = html_parser.findtext('.//title')
+        html_content['title'] = '' if title is None else title
+        html_content['text'] = html_parser.text_content()
         return html_content
 
     def loadHTML(self, url):
         try:
-            url_open = urllib2.urlopen(url, timeout = 1)
-            content = url_open.read()
-            http_headers = url_open.info().headers
+            #url_open = urllib2.urlopen(url, timeout = 1)
+            #content = url_open.read()
+            #http_headers = url_open.info().headers
+            url_open = requests.get(url, timeout = 0.5)
+            content = url_open.text
+            http_headers = dictToText(url_open.headers)
             return self.loadHTMLContent(content, http_headers, url)
-        except urllib2.URLError as e:
-            print 'network connection lost', url, e
-            return None
-        except ValueError as e:
-            print 'can not open', url, e
-            return None
-        except urllib2.HTTPError as e:
-            print 'http error for', url, e
-            return None
-        except:
-            print 'unexpected error', url
+        except Exception as e:
+            print e, url
             return None
 
-    def getOutLinks(self, soup, parent_url):
+    def getOutLinks(self, selector, parent_url):
         out_links = []
-        for link in soup.find_all('a'):
+        for link in selector:
             link_content = [link.get('href'), link.get('title')]
             href = link_content[0]
             if link_content[1] is None:
@@ -101,19 +93,22 @@ class Crawler:
                     href[0] != '#':
                 # skip None href, invalide url type and fragment
                 if self.title_terms is not None:
-                    exist_in_url = False
+                    url_lower = link_content[0].lower()
+                    url_parent_low = parent_url.lower()
+                    exist_in_url = 0
                     for term in self.title_terms:
-                        if term in link_content[0]:
-                            exist_in_url = True
-                            break
-                    if len(self.title_terms & link_terms) > 0 or exist_in_url:
+                        if term in url_lower or term in url_parent_low:
+                            exist_in_url += 1
+                    if len(self.title_terms & link_terms) > 1 or exist_in_url > 1:
                         # get the full address
                         out_link_full = getOutLinkURL(link_content[0], parent_url)
-                        if len(out_link_full) > 0:
+                        if len(out_link_full) < 500 and ' ' not in out_link_full:
+                            # only get eligible url
                             out_links.append(out_link_full)
                 else:
                     out_link_full = getOutLinkURL(link_content[0], parent_url)
-                    out_links.append(out_link_full)
+                    if len(out_link_full) < 500 and ' ' not in out_link_full:
+                        out_links.append(out_link_full)
         return out_links
 
     def set(self, url, domain, html_content):
@@ -167,18 +162,9 @@ class Crawler:
         self.file_html.write(' '.join(['<DOCNO>', str(url_id), '</DOCNO>', '\n']))
         self.file_html.write(' '.join(['<URL>', url, '</URL>', '\n']))
         self.file_html.write(' '.join(['<DEPTH>', str(self.depth), '</DEPTH>', '\n']))
-        if len(html_content['title']) > 0:
-            title_text = ' '.join(html_content['title'])
-        else:
-            title_text = ''
-        self.file_html.write(' '.join(['<HEAD>', title_text,
+        self.file_html.write(' '.join(['<HEAD>', html_content['title'],
                                         '</HEAD>', '\n']))
-        if len(html_content['http_headers']) > 0:
-            http_headers_text = ' '.join(html_content['http_headers'])
-        else:
-            http_headers_text = ''
-        self.file_html.write(' '.join(['<HTTPHEADER>', '\n',
-                                        http_headers_text,
+        self.file_html.write(' '.join(['<HTTPHEADER>', html_content['http_headers'],
                                         '</HTTPHEADER>', '\n']))
         # print html_content['out_links']
         out_links_text = ' '.join(html_content['out_links'])
@@ -227,6 +213,7 @@ class Crawler:
         # add out link edges of the url remaining in the url_queue
         print 'add remaining link edges'
         self.processRemainEdges()
+        print 'running time for crawler', datetime.now() - now
         # save results
         print 'write results'
         self.dumpCrawler()
@@ -280,10 +267,6 @@ class Crawler:
                                         crawl_list.items())
             crawl_list_present = map(lambda l: l[1][length - 1], crawl_list_present)
             for tmp_url_id in crawl_list_present:
-                '''t = threading.Thread(target = self.crawlURLNextLevel,
-                                    args = (tmp_url_id, out_links))
-                t.daemon = True
-                t.start()'''
                 self.crawlURLNextLevel(tmp_url_id, out_links)
                 if self.url_num > self.MAX_URL_NUM:
                     # stop when meets the requirement
@@ -378,6 +361,12 @@ def dumpDict(f, d):
         line = ' '.join(map(lambda t: str(t), line_list)) + '\n'
         f.write(line)
     return
+
+def dictToText(d):
+    text = ''
+    for key, val in d.iteritems():
+        text += ':'.join([key,val]) + '\n'
+    return text
 
 def parseRobot(domain):
     robot_url = '/'.join([domain, 'robots.txt'])
@@ -482,13 +471,11 @@ def processCrawlList(out_links):
     return crawl_list
 
 if __name__ == '__main__':
-    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolution'
-    ''',
+    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolution',
     'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
     'http://www.historycentral.com/Revolt/causes.html',
-    'https://lenoxhistory.org/lenoxhistorybigpicture/non-importation-agreement/',
-    'http://www.history.com/topics/american-revolution/american-revolution-history''''
-    ]
-    title = 'independence war american revolution cause causes reason reasons purpose purposes'
+    'http://www.historyrocket.com/American-History/revolutionary-war/Cause-And-Effect-Of-The-Revolutionary-War.html',
+    'https://www.thoughtco.com/causes-of-the-american-revolution-104860']
+    title = 'independence war american revolution history cause reason purpose'
     crawler = Crawler(seed_url_list, title)
     crawler.crawl()

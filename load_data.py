@@ -11,21 +11,17 @@ TEXT = 'TEXT'
 HTML = 'HTML'
 
 import os
-DIR_DATA = '../results/'
+DIR_DATA = '../results_full_3rd/'
 
 DIR_FILE = DIR_DATA + 'URL/'
-file_list = os.listdir(DIR_FILE)[:1]
+file_list = filter(lambda f: f[:3] == 'URL', os.listdir(DIR_FILE))
 print len(file_list), ' files to load'
-
-'''from elasticsearch import Elasticsearch
-es = Elasticsearch(['localhost'], # hostname
-                   http_auth=('elastic', 'elastic')) # username, pwd
-'''
+print file_list
 from datetime import datetime
 
 now = datetime.now()
 
-index = Store()
+index = Store('crawler_wqin')
 # insert(self, count, url, header, title, text, raw, out_links)
 def getStart(text):
     return ''.join(['<', text, '>'])
@@ -37,8 +33,13 @@ def loadURLInfo():
         f_content = f.readlines()
     url_info = {}
     for content in f_content:
-        url_id, domain_id, url, in_links = content.rstrip('\n').split(' ')
-        in_links_list = in_links.split(',')
+        content_list = content.rstrip('\n').split(' ')
+        if len(content_list) == 4:
+            url_id, domain_id, url, in_links = content_list
+            in_links_list = in_links.split(',')
+        else:
+            url_id, domain_id, url = content_list
+            in_links_list = []
         url_info[url_id] = in_links_list
     return url_info
 
@@ -66,14 +67,15 @@ for file_name in file_list:
                 if cnt > 0:
                     in_links = map(lambda i: url_map[i] if i != '' else '',
                                     url_info[url_id])
-                    index.insert(url, url_id, http_header, head, text, html,
-                                    in_links, out_links, depth)
-                read_text, read_html, read_http_header = False, False, False
-                text, html, http_header = '', '', ''
+                    index.mergeInLinks(url, url_id, http_header, title, text, html,
+                                in_links, out_links, depth)
+                read_text, read_html = False, False
+                http_header, title, text, html = '', '', '', ''
+                in_links = []
 
                 cnt += 1
                 if cnt % 500 == 0:
-                    print 'loaded ', cnt, ' documents'
+                    print 'loaded', cnt, 'documents'
             elif line[:len(getStart(DOCNO))] == getStart(DOCNO):
                 url_id = line.lstrip(getStart(DOCNO)).rstrip(getEnd(DOCNO)).strip(' ')
             elif line[:len(getStart(URL))] == getStart(URL):
@@ -84,6 +86,8 @@ for file_name in file_list:
                 head = line.lstrip(getStart(HEAD)).rstrip(getEnd(HEAD)).strip(' ')
             elif line[:len(getStart(OUTLINKS))] == getStart(OUTLINKS):
                 out_links = line.lstrip(getStart(OUTLINKS)).rstrip(getEnd(OUTLINKS)).strip(' ')
+            elif line[:len(getStart(HTTP_HEADER))] == getStart(HTTP_HEADER):
+                out_links = line.lstrip(getStart(HTTP_HEADER)).rstrip(getEnd(HTTP_HEADER)).strip(' ')
 
             elif line[:len(getStart(TEXT))] == getStart(TEXT):
                 read_text = True
@@ -99,25 +103,16 @@ for file_name in file_list:
             elif line[-len(getEnd(HTML)):] == getEnd(HTML):
                 read_html = False
 
-            elif line[:len(getStart(HTTP_HEADER))] == getStart(HTTP_HEADER):
-                read_http_header = True
-                if len(line.lstrip(getStart(HTTP_HEADER))) > 0:
-                    http_header += l.lstrip(getStart(HTTP_HEADER))
-            elif line[-len(getEnd(HTTP_HEADER)):] == getEnd(HTTP_HEADER):
-                read_http_header = False
-
             else:
                 if read_text:
                     text += l
                 elif read_html:
                     html += l
-                elif read_http_header:
-                    http_header += l
 if cnt > 0:
     in_links = map(lambda i: url_map[i] if i != '' else '',
                     url_info[url_id])
-    index.insert(url, url_id, http_header, head, text, html,
-                    in_links, out_links, depth)
+    index.mergeInLinks(url, url_id, http_header, title, text, html,
+                in_links, out_links, depth)
 
 print 'running time is ', datetime.now() - now
 print 'total number of documents loaded is', cnt
