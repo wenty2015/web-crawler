@@ -47,14 +47,16 @@ def loadURLMap():
     with open(DIR_DATA + 'URL_MAP.txt', 'rb') as f:
         f_content = f.readlines()
     url_map = {}
+    urls = set()
     for content in f_content:
         url_id, url = content.rstrip('\n').split(' ')
         url_map[url_id] = url
-    return url_map
+        urls.add(url)
+    return url_map, urls
 
 cnt = 0
 url_info = loadURLInfo()
-url_map = loadURLMap()
+url_map, urls = loadURLMap()
 
 for file_name in file_list:
     if file_name == 'readme':
@@ -67,6 +69,7 @@ for file_name in file_list:
                 if cnt > 0:
                     in_links = map(lambda i: url_map[i] if i != '' else '',
                                     url_info[url_id])
+                    out_links = filter(lambda ol: ol in urls, out_links.split(' '))
                     index.mergeInLinks(url, url_id, http_header, title, text, html,
                                 in_links, out_links, depth)
                 read_text, read_html, read_http_header = False, False, False
@@ -118,6 +121,7 @@ for file_name in file_list:
 if cnt > 0:
     in_links = map(lambda i: url_map[i] if i != '' else '',
                     url_info[url_id])
+    out_links = filter(lambda ol: ol in urls, out_links.split(' '))
     index.mergeInLinks(url, url_id, http_header, title, text, html,
                 in_links, out_links, depth)
 
