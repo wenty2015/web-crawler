@@ -9,7 +9,7 @@ import sys
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-RESULT_DIR = '../results_full_3rd/'
+RESULT_DIR = '../results_full_7th/'
 
 class Crawler:
     MAX_URL_NUM = 21000
@@ -38,9 +38,7 @@ class Crawler:
         self.title_terms = set()
         self.openNewHTMLFiles()
         if len(title) > 0:
-            for term in re.findall(r"\w+",title):
-                #self.title_terms.add(stem(term.lower()))
-                self.title_terms.add(term.lower())
+            self.title_terms = set(title.lower().split(' '))
         print 'title', self.title_terms
 
         for raw_url in self.seed_url_list:
@@ -55,11 +53,11 @@ class Crawler:
     def loadHTMLContent(self, content, http_headers, url):
         html_content = {}
         html_content['html'] = content
-        html_content['http_headers'] = http_headers
+        html_content['http_headers'] = dictToText(http_headers)
         # load html content
         html_parser = html.fromstring(content)
         html_content['out_links'] = self.getOutLinks(
-                                        self.css_selector(html_parser), url)
+                        self.css_selector(html_parser), url, http_headers)
         title = html_parser.findtext('.//title')
         html_content['title'] = '' if title is None else title
         html_content['text'] = html_parser.text_content()
@@ -67,47 +65,44 @@ class Crawler:
 
     def loadHTML(self, url):
         try:
-            #url_open = urllib2.urlopen(url, timeout = 1)
-            #content = url_open.read()
-            #http_headers = url_open.info().headers
             url_open = requests.get(url, timeout = 0.5)
             content = url_open.text
-            http_headers = dictToText(url_open.headers)
-            return self.loadHTMLContent(content, http_headers, url)
+            return self.loadHTMLContent(content, url_open.headers, url)
         except Exception as e:
             print e, url
             return None
 
-    def getOutLinks(self, selector, parent_url):
+    def getOutLinks(self, selector, parent_url, http_headers):
         out_links = []
         for link in selector:
-            link_content = [link.get('href'), link.get('title')]
+            link_content = [link.get('href'), link.get('title'), link.get('rel')]
             href = link_content[0]
-            if link_content[1] is None:
-                link_terms = set()
-            else:
-                link_terms = re.findall(r"\w+", link_content[1].lower())
-                # link_terms = set(map(lambda t: stem(t), link_terms))
-                link_terms = set(link_terms)
-            if href is not None and len(href) > 1 and isValieURLType(href) and \
-                    href[0] != '#':
+            nofollow_flag = link_content[2]
+            link_terms = '' if link_content[1] is None else link_content[1].lower()
+            can_crawl = href is not None \
+                            and len(href) > 1 \
+                            and isValieURLType(href) \
+                            and href[0] != '#' \
+                            and nofollow_flag != 'nofollow'
+            valid_http_header = isValidHTTPHeader(http_headers)
+            if can_crawl and valid_http_header:
+                out_link_full = getOutLinkURL(link_content[0], parent_url)
+                is_eligible_url = isEligibleURL(out_link_full)
                 # skip None href, invalide url type and fragment
                 if self.title_terms is not None:
-                    url_lower = link_content[0].lower()
-                    url_parent_low = parent_url.lower()
-                    exist_in_url = 0
+                    exist_in_url, exist_in_title = 0, 0
                     for term in self.title_terms:
-                        if term in url_lower or term in url_parent_low:
+                        if term in out_link_full.lower():
                             exist_in_url += 1
-                    if len(self.title_terms & link_terms) > 1 or exist_in_url > 1:
+                        if term in link_terms.lower():
+                            exist_in_title += 1
+                    if exist_in_title > 1 or exist_in_url > 1:
                         # get the full address
-                        out_link_full = getOutLinkURL(link_content[0], parent_url)
-                        if len(out_link_full) < 500 and ' ' not in out_link_full:
+                        if is_eligible_url:
                             # only get eligible url
                             out_links.append(out_link_full)
                 else:
-                    out_link_full = getOutLinkURL(link_content[0], parent_url)
-                    if len(out_link_full) < 500 and ' ' not in out_link_full:
+                    if is_eligible_url:
                         out_links.append(out_link_full)
         return out_links
 
@@ -197,17 +192,11 @@ class Crawler:
                 crawl_list: {domain_id: [tmp_url_id]}'''
                 print 'generate crawl list'
                 crawl_list = processCrawlList(out_links)
-                '''with open(RESULT_DIR + 'url_next_level', 'wb') as f:
-                    cPickle.dump(url_next_level, f)
-                with open(RESULT_DIR + 'out_links', 'wb') as f:
-                    cPickle.dump(out_links, f)
-                with open(RESULT_DIR + 'crawl_list', 'wb') as f:
-                    cPickle.dump(crawl_list, f)'''
 
                 # crawl all the urls in the next wave, and add them as url nodes
                 print 'start crawling next wave'
-                self.crawlNextLevel(crawl_list, out_links)
                 self.depth += 1
+                self.crawlNextLevel(crawl_list, out_links)
             else:
                 print 'no new out links'
         # add out link edges of the url remaining in the url_queue
@@ -343,6 +332,21 @@ class Crawler:
 def listToText(l, sep = ' '):
     return sep.join(map(lambda x: str(x), l))
 
+def isValidHTTPHeader(http_headers):
+    flag = True
+    if 'Content-Type' in http_headers.keys():
+        if 'text' not in http_headers['Content-Type']:
+            flag = False
+    if 'Content-Language' in http_headers.keys():
+        if 'en' not in http_headers['Content-Language']:
+            flag = False
+    return flag
+
+def isEligibleURL(url):
+    flag = len(url) < 200 and ' ' not in url and '\n' not in url \
+                    and url[:4].lower() == 'http'
+    return flag
+
 def getOutLinkURL(out_link, parent_url):
     if out_link[:2] == '//': # new domain
         outlink = out_link.lstrip('//')
@@ -379,19 +383,19 @@ def parseRobot(domain):
         return None
 
 def getDomain(url): # canonicalized url
-    net_split = url.lower().split('://')
+    net_split = url.split('://')
     if len(net_split) == 1: # no scheme
         net = net_split[0].split('/')
-        return net[0]
+        return net[0].lower()
     elif len(net_split) == 2:
         scheme, net = net_split
         net = net.split('/')
-        return '://'.join([scheme, net[0]])
+        return '://'.join([scheme.lower(), net[0].lower()])
     else:
         return ''
 
 def canonicalizeURL(url):
-    net_split = url.lower().split('://')
+    net_split = url.split('://')
     if len(net_split) == 1:
         scheme, net = '', net_split[0]
     elif len(net_split) == 2:
@@ -401,11 +405,11 @@ def canonicalizeURL(url):
     # remove duplicate slashes and the fragment
     net = net.replace('//','/').split('#')[0].split('/')
     # remove port
-    net[0] = net[0].split(':')[0]
+    net[0] = net[0].split(':')[0].lower()
     if scheme == '':
         url = '/'.join(net)
     else:
-        url = '://'.join([scheme, '/'.join(net)])
+        url = '://'.join([scheme.lower(), '/'.join(net)])
     # domain = getDomain(url)
     return url
 
@@ -425,11 +429,13 @@ def getRelativeURL(url, relative_repo = ''):
             relative_url = url
         else:
             relative_url = url + relative_repo
+    else:
+        relative_url = url
     return relative_url
 
 def isValieURLType(url):
     type_not_covered = ['pdf', 'jpg', 'jpeg', 'gif', 'png', 'svg', 'zip', 'doc']
-    if url.split('.')[-1] in type_not_covered:
+    if url.split('.')[-1].lower() in type_not_covered:
         return False
     else:
         return True
@@ -474,8 +480,9 @@ if __name__ == '__main__':
     seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolution',
     'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
     'http://www.historycentral.com/Revolt/causes.html',
-    'http://www.historyrocket.com/American-History/revolutionary-war/Cause-And-Effect-Of-The-Revolutionary-War.html',
     'https://www.thoughtco.com/causes-of-the-american-revolution-104860']
-    title = 'independence war american revolution history cause reason purpose'
+    keywords = ['independ', 'america', 'u.s', 'histor', 'caus', 'revolut', 'reason',
+                'purpos', 'war']
+    title = ' '.join(keywords)
     crawler = Crawler(seed_url_list, title)
     crawler.crawl()

@@ -11,7 +11,7 @@ TEXT = 'TEXT'
 HTML = 'HTML'
 
 import os
-DIR_DATA = '../results_full_3rd/'
+DIR_DATA = '../results_full_7th/'
 
 DIR_FILE = DIR_DATA + 'URL/'
 file_list = filter(lambda f: f[:3] == 'URL', os.listdir(DIR_FILE))
@@ -21,7 +21,7 @@ from datetime import datetime
 
 now = datetime.now()
 
-index = Store('crawler_wqin')
+index = Store('crawler_beauty')
 # insert(self, count, url, header, title, text, raw, out_links)
 def getStart(text):
     return ''.join(['<', text, '>'])
@@ -69,8 +69,8 @@ for file_name in file_list:
                                     url_info[url_id])
                     index.mergeInLinks(url, url_id, http_header, title, text, html,
                                 in_links, out_links, depth)
-                read_text, read_html = False, False
-                http_header, title, text, html = '', '', '', ''
+                read_text, read_html, read_http_header = False, False, False
+                http_header, text, html = '', '', ''
                 in_links = []
 
                 cnt += 1
@@ -83,11 +83,16 @@ for file_name in file_list:
             elif line[:len(getStart(DEPTH))] == getStart(DEPTH):
                 depth = line.lstrip(getStart(DEPTH)).rstrip(getEnd(DEPTH)).strip(' ')
             elif line[:len(getStart(HEAD))] == getStart(HEAD):
-                head = line.lstrip(getStart(HEAD)).rstrip(getEnd(HEAD)).strip(' ')
+                title = line.lstrip(getStart(HEAD)).rstrip(getEnd(HEAD)).strip(' ')
             elif line[:len(getStart(OUTLINKS))] == getStart(OUTLINKS):
                 out_links = line.lstrip(getStart(OUTLINKS)).rstrip(getEnd(OUTLINKS)).strip(' ')
+
             elif line[:len(getStart(HTTP_HEADER))] == getStart(HTTP_HEADER):
-                out_links = line.lstrip(getStart(HTTP_HEADER)).rstrip(getEnd(HTTP_HEADER)).strip(' ')
+                read_http_header = True
+                if len(line.lstrip(getStart(HTTP_HEADER))) > 0:
+                    http_header += l.lstrip(getStart(HTTP_HEADER))
+            elif line[-len(getEnd(HTTP_HEADER)):] == getEnd(HTTP_HEADER):
+                read_http_header = False
 
             elif line[:len(getStart(TEXT))] == getStart(TEXT):
                 read_text = True
@@ -108,6 +113,8 @@ for file_name in file_list:
                     text += l
                 elif read_html:
                     html += l
+                elif read_http_header:
+                    http_header += l
 if cnt > 0:
     in_links = map(lambda i: url_map[i] if i != '' else '',
                     url_info[url_id])
