@@ -8,8 +8,9 @@ from lxml import html, cssselect
 import sys
 reload(sys)
 sys.setdefaultencoding("utf-8")
+import robotexclusionrulesparser
 
-RESULT_DIR = '../results_full_7th/'
+RESULT_DIR = '../results_full_9th/'
 
 class Crawler:
     MAX_URL_NUM = 21000
@@ -122,8 +123,23 @@ class Crawler:
         if domain not in self.domain_map:
             domain_id = self.domain_num
             self.domain_map[domain] = domain_id
+
+            def parseCrawlerDelay(domain):
+                robot_url = '/'.join([domain, 'robots.txt'])
+                rerp = robotexclusionrulesparser.RobotExclusionRulesParser()
+                rerp.user_agent = '*'
+                try:
+                    rerp.fetch(robot_url)
+                    return rerp.get_crawl_delay('*')
+                except:
+                    return None
+            crawler_delay =  parseCrawlerDelay(domain)
+            if crawler_delay is None:
+                crawler_delay = -1
+
             self.domain_nodes[domain_id] = {'domain': domain,
-                                            'robot': parseRobot(domain)}
+                                            'robot': parseRobot(domain),
+                                            'delay': crawler_delay}
             self.domain_num += 1
         else:
             domain_id = self.domain_map[domain]
@@ -257,11 +273,16 @@ class Crawler:
             crawl_list_present = map(lambda l: l[1][length - 1], crawl_list_present)
             for tmp_url_id in crawl_list_present:
                 self.crawlURLNextLevel(tmp_url_id, out_links)
+                crawler_delay = .5
+                domain_id = out_links[tmp_url_id]['domain_id']
+                if self.domain_nodes[domain_id]['delay'] > 0:
+                    crawler_delay = max(crawler_delay,
+                                        self.domain_nodes[domain_id]['delay'])
                 if self.url_num > self.MAX_URL_NUM:
                     # stop when meets the requirement
                     return
-            # wait .5s to avoid visit the same domain too frequently
-            time.sleep(.5)
+            # wait at least .5s to avoid visit the same domain too frequently
+            time.sleep(crawler_delay)
         return
 
     def crawlURLNextLevel(self, tmp_url_id, out_links):
@@ -389,8 +410,9 @@ def getDomain(url): # canonicalized url
         return net[0].lower()
     elif len(net_split) == 2:
         scheme, net = net_split
+        scheme = 'http' if scheme.lower() == 'https' else scheme.lower()
         net = net.split('/')
-        return '://'.join([scheme.lower(), net[0].lower()])
+        return '://'.join([scheme, net[0].lower()])
     else:
         return ''
 
@@ -409,7 +431,8 @@ def canonicalizeURL(url):
     if scheme == '':
         url = '/'.join(net)
     else:
-        url = '://'.join([scheme.lower(), '/'.join(net)])
+        scheme = 'http' if scheme.lower() == 'https' else scheme.lower()
+        url = '://'.join([scheme, '/'.join(net)])
     # domain = getDomain(url)
     return url
 
@@ -434,7 +457,8 @@ def getRelativeURL(url, relative_repo = ''):
     return relative_url
 
 def isValieURLType(url):
-    type_not_covered = ['pdf', 'jpg', 'jpeg', 'gif', 'png', 'svg', 'zip', 'doc']
+    type_not_covered = ['pdf', 'jpg', 'jpeg', 'gif', 'png', 'svg', 'zip', 'doc',
+                        'tif', 'tiff']
     if url.split('.')[-1].lower() in type_not_covered:
         return False
     else:
@@ -477,12 +501,12 @@ def processCrawlList(out_links):
     return crawl_list
 
 if __name__ == '__main__':
-    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolution',
+    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolutionary_War',
+    'http://en.wikipedia.org/wiki/American_Revolution',
     'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
     'http://www.historycentral.com/Revolt/causes.html',
     'https://www.thoughtco.com/causes-of-the-american-revolution-104860']
-    keywords = ['independ', 'america', 'u.s', 'histor', 'caus', 'revolut', 'reason',
-                'purpos', 'war']
-    title = ' '.join(keywords)
+
+    title = 'independ america u.s histor caus revolut reason purpos war authoritarian autocrac capital collaboration colon cronyism despot dictatorship discrimin econom depress econom inequal elector fraud famin fascism feudal imperial militar occup monarch natur disast nepot persecut politic corrupt repress povert totalitarian unemploy'
     crawler = Crawler(seed_url_list, title)
     crawler.crawl()
