@@ -8,9 +8,9 @@ from lxml import html, cssselect
 import sys
 reload(sys)
 sys.setdefaultencoding("utf-8")
-import robotexclusionrulesparser
+import robotexclusionrulesparser, urllib2
 
-RESULT_DIR = '../results_full_9th/'
+RESULT_DIR = '../results_full_20th/'
 
 class Crawler:
     MAX_URL_NUM = 21000
@@ -124,19 +124,11 @@ class Crawler:
             domain_id = self.domain_num
             self.domain_map[domain] = domain_id
 
-            def parseCrawlerDelay(domain):
-                robot_url = '/'.join([domain, 'robots.txt'])
-                rerp = robotexclusionrulesparser.RobotExclusionRulesParser()
-                rerp.user_agent = '*'
-                try:
-                    rerp.fetch(robot_url)
-                    return rerp.get_crawl_delay('*')
-                except:
-                    return None
-            crawler_delay =  parseCrawlerDelay(domain)
-            if crawler_delay is None:
-                crawler_delay = -1
-
+            robot_parser = parseRobot(domain)
+            try:
+                crawler_delay = robot_parser.get_crawl_delay('*')
+            except:
+                crawler_delay = None
             self.domain_nodes[domain_id] = {'domain': domain,
                                             'robot': parseRobot(domain),
                                             'delay': crawler_delay}
@@ -275,7 +267,7 @@ class Crawler:
                 self.crawlURLNextLevel(tmp_url_id, out_links)
                 crawler_delay = .5
                 domain_id = out_links[tmp_url_id]['domain_id']
-                if self.domain_nodes[domain_id]['delay'] > 0:
+                if self.domain_nodes[domain_id]['delay'] is not None:
                     crawler_delay = max(crawler_delay,
                                         self.domain_nodes[domain_id]['delay'])
                 if self.url_num > self.MAX_URL_NUM:
@@ -335,7 +327,7 @@ class Crawler:
         if robot_parser is None:
             return True
         try:
-            return robot_parser.can_fetch('*', url)
+            return robot_parser.is_allowed('*', url)
         except:
             # print 'error when parse robot', url
             return True
@@ -395,10 +387,14 @@ def dictToText(d):
 
 def parseRobot(domain):
     robot_url = '/'.join([domain, 'robots.txt'])
-    robot_parser = robotparser.RobotFileParser()
-    robot_parser.set_url(robot_url)
     try:
-        robot_parser.read()
+        robot_file = urllib2.urlopen(robot_url).read()
+        robot_content = ''
+        for l in robot_file.split('\n'):
+            if l.replace(' ','') != '':
+                robot_content += l + '\n'
+        robot_parser = robotexclusionrulesparser.RobotExclusionRulesParser()
+        robot_parser.parse(robot_content)
         return robot_parser
     except:
         return None

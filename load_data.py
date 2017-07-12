@@ -11,7 +11,7 @@ TEXT = 'TEXT'
 HTML = 'HTML'
 
 import os
-DIR_DATA = '../results_full_7th/'
+DIR_DATA = '../results_full_20th/'
 
 DIR_FILE = DIR_DATA + 'URL/'
 file_list = filter(lambda f: f[:3] == 'URL', os.listdir(DIR_FILE))
@@ -85,6 +85,7 @@ for file_name in file_list:
                 url = line.lstrip(getStart(URL)).rstrip(getEnd(URL)).strip(' ')
             elif line[:len(getStart(DEPTH))] == getStart(DEPTH):
                 depth = line.lstrip(getStart(DEPTH)).rstrip(getEnd(DEPTH)).strip(' ')
+                depth = str(int(depth) - 1)
             elif line[:len(getStart(HEAD))] == getStart(HEAD):
                 title = line.lstrip(getStart(HEAD)).rstrip(getEnd(HEAD)).strip(' ')
             elif line[:len(getStart(OUTLINKS))] == getStart(OUTLINKS):
