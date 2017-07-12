@@ -10,8 +10,8 @@ reload(sys)
 sys.setdefaultencoding("utf-8")
 import robotexclusionrulesparser, urllib2
 
-RESULT_DIR = '../results_full_20th/'
-
+#RESULT_DIR = '../results_full_20th/'
+RESULT_DIR = '../results_test/'
 class Crawler:
     MAX_URL_NUM = 21000
     URL_PER_FILE = 500
@@ -45,10 +45,11 @@ class Crawler:
         for raw_url in self.seed_url_list:
             url = canonicalizeURL(raw_url)
             domain = getDomain(url)
-            html_content = self.loadHTML(url)
-            if html_content is not None:
-                _, url_id = self.set(url, domain, html_content)
-            self.url_queue.append(url_id)
+            if self.canCrawl(url, domain) == True:
+                html_content = self.loadHTML(url)
+                if html_content is not None:
+                    _, url_id = self.set(url, domain, html_content)
+                self.url_queue.append(url_id)
         return
 
     def loadHTMLContent(self, content, http_headers, url):
@@ -497,7 +498,8 @@ def processCrawlList(out_links):
     return crawl_list
 
 if __name__ == '__main__':
-    seed_url_list = ['http://en.wikipedia.org/wiki/American_Revolutionary_War',
+    seed_url_list = ['https://en.wikipedia.org/wiki/Wikipedia:Benutzersperrung/',
+    'http://en.wikipedia.org/wiki/American_Revolutionary_War',
     'http://en.wikipedia.org/wiki/American_Revolution',
     'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
     'http://www.historycentral.com/Revolt/causes.html',
