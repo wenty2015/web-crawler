@@ -45,11 +45,17 @@ class Crawler:
         for raw_url in self.seed_url_list:
             url = canonicalizeURL(raw_url)
             domain = getDomain(url)
+            domain_id = self.addDomain(domain)
             if self.canCrawl(url, domain) == True:
+                if self.domain_nodes[domain_id]['delay'] is None:
+                    crawler_delay = 0.5
+                else:
+                    crawler_delay = self.domain_nodes[domain_id]['delay']
                 html_content = self.loadHTML(url)
                 if html_content is not None:
                     _, url_id = self.set(url, domain, html_content)
                 self.url_queue.append(url_id)
+                time.sleep(crawler_delay)
         return
 
     def loadHTMLContent(self, content, http_headers, url):
@@ -117,7 +123,7 @@ class Crawler:
             else:
                 domain_id = self.domain_map[domain]
             url_id = self.addURL(url, domain_id, html_content)
-            print url_id, url
+            print url_id, url, datetime.now()
             return domain_id, url_id
 
     def addDomain(self, domain):
@@ -498,7 +504,11 @@ def processCrawlList(out_links):
     return crawl_list
 
 if __name__ == '__main__':
-    seed_url_list = ['https://en.wikipedia.org/wiki/Wikipedia:Benutzersperrung/',
+    print datetime.now()
+    seed_url_list = ['http://www.csnchicago.com/bulls',
+    'http://www.csnchicago.com/admin/',
+    'http://www.csnchicago.com/cubs',
+    'https://en.wikipedia.org/wiki/Wikipedia:Benutzersperrung/',
     'http://en.wikipedia.org/wiki/American_Revolutionary_War',
     'http://en.wikipedia.org/wiki/American_Revolution',
     'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
