@@ -10,7 +10,6 @@ reload(sys)
 sys.setdefaultencoding("utf-8")
 import robotexclusionrulesparser, urllib2
 
-#RESULT_DIR = '../results_full_20th/'
 RESULT_DIR = '../results_test/'
 class Crawler:
     MAX_URL_NUM = 21000
@@ -505,16 +504,8 @@ def processCrawlList(out_links):
 
 if __name__ == '__main__':
     print datetime.now()
-    seed_url_list = ['http://www.csnchicago.com/bulls',
-    'http://www.csnchicago.com/admin/',
-    'http://www.csnchicago.com/cubs',
-    'https://en.wikipedia.org/wiki/Wikipedia:Benutzersperrung/',
-    'http://en.wikipedia.org/wiki/American_Revolutionary_War',
-    'http://en.wikipedia.org/wiki/American_Revolution',
-    'http://www.revolutionary-war.net/causes-of-the-american-revolution.html',
-    'http://www.historycentral.com/Revolt/causes.html',
-    'https://www.thoughtco.com/causes-of-the-american-revolution-104860']
+    seed_url_list = []
 
-    title = 'independ america u.s histor caus revolut reason purpos war authoritarian autocrac capital collaboration colon cronyism despot dictatorship discrimin econom depress econom inequal elector fraud famin fascism feudal imperial militar occup monarch natur disast nepot persecut politic corrupt repress povert totalitarian unemploy'
+    title = '' # title key words
     crawler = Crawler(seed_url_list, title)
     crawler.crawl()
